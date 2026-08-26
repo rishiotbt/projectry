@@ -45,7 +45,6 @@ def build_login_view(on_login_click=None) -> ft.Control:
                     border_radius=8,
                     border=ft.Border.all(1, config.BORDER_COLOR),
                     url="/auth/login",
-                    url_target="_self",
                     ink=True,
                     content=ft.Row(
                         alignment=ft.MainAxisAlignment.CENTER,
