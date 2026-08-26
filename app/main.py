@@ -172,38 +172,45 @@ def main(page: ft.Page) -> None:
 
     page.on_logout = lambda e: page.run_task(_do_logout)
 
-    route = page.route or ""
+    # ── Route handler (also handles initial route via page.go) ───────────────
 
-    # OAuth just completed — route is /auth_{state}
-    if route.startswith("/auth_"):
-        auth_state = route[6:]
-        auth_data = _pending_auth.pop(auth_state, None)
-        if auth_data and time.time() - auth_data.get("timestamp", 0) < 300:
-            state.access_token = auth_data["access_token"]
-            state.user_id = auth_data["user_id"]
-            state.user_name = auth_data["user_name"]
-            state.user_email = auth_data["user_email"]
-            state.user_avatar = auth_data["user_avatar"]
-            state.authenticated = True
-            if state.user_id:
-                state.products = _load_products(state.user_id)
-            page.run_task(_save_session)
-            _show_workspace()
-        else:
-            _show_login(error="Login failed or expired. Please try again.")
-
-    elif route == "/auth_error":
-        _show_login(error="Google login failed. Please try again.")
-
-    else:
-        # Show login immediately, upgrade to workspace if session exists
-        _show_login()
-
-        async def _try_restore() -> None:
-            if await _restore_session():
+    def _handle_route(route: str) -> None:
+        route = route or ""
+        if route.startswith("/auth_"):
+            auth_state = route[6:]
+            auth_data = _pending_auth.pop(auth_state, None)
+            if auth_data and time.time() - auth_data.get("timestamp", 0) < 300:
+                state.access_token = auth_data["access_token"]
+                state.user_id = auth_data["user_id"]
+                state.user_name = auth_data["user_name"]
+                state.user_email = auth_data["user_email"]
+                state.user_avatar = auth_data["user_avatar"]
+                state.authenticated = True
+                if state.user_id:
+                    state.products = _load_products(state.user_id)
+                page.run_task(_save_session)
                 _show_workspace()
+            else:
+                _show_login(error="Login failed or expired. Please try again.")
+        elif route == "/auth_error":
+            _show_login(error="Google login failed. Please try again.")
 
-        page.run_task(_try_restore)
+    page.on_route_change = lambda e: _handle_route(e.route)
+
+    # Show login immediately (always safe default)
+    _show_login()
+
+    async def _init_async() -> None:
+        # Give Flet time to send page.route over WebSocket
+        import asyncio
+        await asyncio.sleep(0.2)
+        route = page.route or ""
+        if route.startswith("/auth_") or route == "/auth_error":
+            _handle_route(route)
+        elif await _restore_session():
+            _show_workspace()
+
+    page.run_task(_init_async)
 
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
