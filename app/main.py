@@ -8,7 +8,7 @@ import httpx
 import flet as ft
 import flet.fastapi as flet_fastapi
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 
 from app import config
@@ -219,12 +219,11 @@ async def auth_login():
 
 
 @app.get("/oauth/callback")
-async def oauth_callback(
-    code: str = None,
-    state: str = None,
-    error: str = None,
-    **kwargs,
-):
+async def oauth_callback(request: Request):
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+    error = request.query_params.get("error")
+
     if error or not code or not state:
         return RedirectResponse("/#/auth_error")
 
