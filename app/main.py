@@ -204,7 +204,11 @@ def main(page: ft.Page) -> None:
         page.run_task(_do_logout)
 
     async def _on_login_click(e) -> None:
-        await page.login(provider, scope=config.DRIVE_SCOPES)
+        await page.login(
+            provider,
+            scope=config.DRIVE_SCOPES,
+            on_open_authorization_url=lambda url: page.launch_url(url, web_popup_window_name="_self"),
+        )
 
     page.on_login = _on_login
     page.on_logout = _on_logout
