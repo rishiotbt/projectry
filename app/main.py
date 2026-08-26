@@ -152,48 +152,7 @@ def main(page: ft.Page) -> None:
         except Exception:
             return False
 
-    # ── Init: check route or restore session ─────────────────────────────────
-
-    async def _init() -> None:
-        route = page.route or ""
-
-        # OAuth just completed — route is /auth_{state}
-        if route.startswith("/auth_"):
-            auth_state = route[6:]
-            auth_data = _pending_auth.pop(auth_state, None)
-            if auth_data and time.time() - auth_data.get("timestamp", 0) < 300:
-                state.access_token = auth_data["access_token"]
-                state.user_id = auth_data["user_id"]
-                state.user_name = auth_data["user_name"]
-                state.user_email = auth_data["user_email"]
-                state.user_avatar = auth_data["user_avatar"]
-                state.authenticated = True
-                if state.user_id:
-                    state.products = _load_products(state.user_id)
-                await _save_session()
-                _show_workspace()
-                return
-            else:
-                _show_login(error="Login failed or expired. Please try again.")
-                return
-
-        if route == "/auth_error":
-            _show_login(error="Google login failed. Please try again.")
-            return
-
-        # Try restoring existing session
-        restored = await _restore_session()
-        if restored:
-            _show_workspace()
-        else:
-            _show_login()
-
-    # ── Login / Logout ────────────────────────────────────────────────────────
-
-    def _on_login_click(e) -> None:
-        auth_state = secrets.token_urlsafe(16)
-        oauth_url = _build_oauth_url(auth_state)
-        page.launch_url(oauth_url, web_popup_window_name="_self")
+    # ── Init: synchronous route handling + background session restore ─────────
 
     def _on_session_expired() -> None:
         page.run_task(_do_logout)
@@ -213,7 +172,38 @@ def main(page: ft.Page) -> None:
 
     page.on_logout = lambda e: page.run_task(_do_logout)
 
-    page.run_task(_init)
+    route = page.route or ""
+
+    # OAuth just completed — route is /auth_{state}
+    if route.startswith("/auth_"):
+        auth_state = route[6:]
+        auth_data = _pending_auth.pop(auth_state, None)
+        if auth_data and time.time() - auth_data.get("timestamp", 0) < 300:
+            state.access_token = auth_data["access_token"]
+            state.user_id = auth_data["user_id"]
+            state.user_name = auth_data["user_name"]
+            state.user_email = auth_data["user_email"]
+            state.user_avatar = auth_data["user_avatar"]
+            state.authenticated = True
+            if state.user_id:
+                state.products = _load_products(state.user_id)
+            page.run_task(_save_session)
+            _show_workspace()
+        else:
+            _show_login(error="Login failed or expired. Please try again.")
+
+    elif route == "/auth_error":
+        _show_login(error="Google login failed. Please try again.")
+
+    else:
+        # Show login immediately, upgrade to workspace if session exists
+        _show_login()
+
+        async def _try_restore() -> None:
+            if await _restore_session():
+                _show_workspace()
+
+        page.run_task(_try_restore)
 
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
