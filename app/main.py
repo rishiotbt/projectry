@@ -139,6 +139,9 @@ def main(page: ft.Page) -> None:
             return False
 
     async def _init() -> None:
+        # If Flet already has an auth object, on_login will fire — don't interfere
+        if page.auth is not None:
+            return
         restored = await _restore_session()
         if restored:
             _show_workspace()
