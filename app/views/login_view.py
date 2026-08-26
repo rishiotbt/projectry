@@ -2,7 +2,7 @@ import flet as ft
 from app import config
 
 
-def build_login_view(on_login_click=None) -> ft.Control:
+def build_login_view(on_login_click) -> ft.Control:
     return ft.Container(
         bgcolor=config.BG_COLOR,
         expand=True,
@@ -44,7 +44,7 @@ def build_login_view(on_login_click=None) -> ft.Control:
                     bgcolor=config.SURFACE_COLOR,
                     border_radius=8,
                     border=ft.Border.all(1, config.BORDER_COLOR),
-                    url="/auth/login",
+                    on_click=on_login_click,
                     ink=True,
                     content=ft.Row(
                         alignment=ft.MainAxisAlignment.CENTER,

@@ -9,7 +9,7 @@ import flet as ft
 import flet.fastapi as flet_fastapi
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 
 from app import config
 from app.state import AppState
@@ -86,7 +86,7 @@ def main(page: ft.Page) -> None:
 
     def _show_login(error: str | None = None) -> None:
         page.controls.clear()
-        page.add(build_login_view())
+        page.add(build_login_view(on_login_click=_on_login_click))
         if error:
             page.show_dialog(ft.SnackBar(
                 content=ft.Text(error, color="white"),
@@ -172,42 +172,45 @@ def main(page: ft.Page) -> None:
 
     page.on_logout = lambda e: page.run_task(_do_logout)
 
-    # ── Route handler (also handles initial route via page.go) ───────────────
+    # ── Login via popup + polling ─────────────────────────────────────────────
 
-    def _handle_route(route: str) -> None:
-        route = route or ""
-        if route.startswith("/auth_"):
-            auth_state = route[6:]
+    def _on_login_click(e) -> None:
+        auth_state = secrets.token_urlsafe(16)
+        oauth_url = _build_oauth_url(auth_state)
+        page.launch_url(
+            oauth_url,
+            web_popup_window_name="oauthLogin",
+            web_popup_window_width=520,
+            web_popup_window_height=660,
+        )
+        page.run_task(_poll_auth, auth_state)
+
+    async def _poll_auth(auth_state: str) -> None:
+        import asyncio
+        for _ in range(180):          # poll up to 3 minutes
+            await asyncio.sleep(1)
             auth_data = _pending_auth.pop(auth_state, None)
-            if auth_data and time.time() - auth_data.get("timestamp", 0) < 300:
+            if auth_data and time.time() - auth_data.get("timestamp", 0) < 600:
                 state.access_token = auth_data["access_token"]
-                state.user_id = auth_data["user_id"]
-                state.user_name = auth_data["user_name"]
-                state.user_email = auth_data["user_email"]
-                state.user_avatar = auth_data["user_avatar"]
+                state.user_id      = auth_data["user_id"]
+                state.user_name    = auth_data["user_name"]
+                state.user_email   = auth_data["user_email"]
+                state.user_avatar  = auth_data["user_avatar"]
                 state.authenticated = True
                 if state.user_id:
                     state.products = _load_products(state.user_id)
-                page.run_task(_save_session)
+                await _save_session()
                 _show_workspace()
-            else:
-                _show_login(error="Login failed or expired. Please try again.")
-        elif route == "/auth_error":
-            _show_login(error="Google login failed. Please try again.")
+                return
+        _show_login(error="Login timed out. Please try again.")
 
-    page.on_route_change = lambda e: _handle_route(e.route)
-
-    # Show login immediately (always safe default)
+    # Show login page immediately
     _show_login()
 
     async def _init_async() -> None:
-        # Give Flet time to send page.route over WebSocket
         import asyncio
-        await asyncio.sleep(0.2)
-        route = page.route or ""
-        if route.startswith("/auth_") or route == "/auth_error":
-            _handle_route(route)
-        elif await _restore_session():
+        await asyncio.sleep(0.3)
+        if await _restore_session():
             _show_workspace()
 
     page.run_task(_init_async)
@@ -218,11 +221,16 @@ def main(page: ft.Page) -> None:
 app = FastAPI()
 
 
-@app.get("/auth/login")
-async def auth_login():
-    auth_state = secrets.token_urlsafe(16)
-    oauth_url = _build_oauth_url(auth_state)
-    return RedirectResponse(oauth_url, status_code=302)
+@app.get("/auth/complete")
+async def auth_complete(request: Request):
+    error = request.query_params.get("error")
+    msg = "Login failed. Please close this window and try again." if error else "Login successful! You can close this window."
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html><head><title>Auth Complete</title></head>
+<body style="font-family:sans-serif;text-align:center;padding-top:80px">
+<p>{msg}</p>
+<script>window.close();</script>
+</body></html>""")
 
 
 @app.get("/oauth/callback")
@@ -268,11 +276,11 @@ async def oauth_callback(request: Request):
             "timestamp": time.time(),
         }
 
-        return RedirectResponse(f"/#/auth_{state}")
+        return RedirectResponse("/auth/complete")
 
     except Exception as ex:
         print(f"[OAuth] Token exchange error: {ex}")
-        return RedirectResponse("/#/auth_error")
+        return RedirectResponse("/auth/complete?error=1")
 
 
 # Mount Flet under root
