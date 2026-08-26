@@ -221,6 +221,13 @@ def main(page: ft.Page) -> None:
 app = FastAPI()
 
 
+@app.get("/auth/login")
+async def auth_login():
+    auth_state = secrets.token_urlsafe(16)
+    oauth_url = _build_oauth_url(auth_state)
+    return RedirectResponse(oauth_url, status_code=302)
+
+
 @app.get("/oauth/callback")
 async def oauth_callback(
     code: str = None,
