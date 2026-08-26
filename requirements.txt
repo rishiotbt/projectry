@@ -1,4 +1,5 @@
 flet>=0.86.0
+flet-web>=0.86.0
 httpx>=0.27.0
 python-dotenv>=1.0.0
 fastapi>=0.111.0
