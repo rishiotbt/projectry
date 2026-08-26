@@ -139,8 +139,22 @@ def main(page: ft.Page) -> None:
             return False
 
     async def _init() -> None:
-        # If Flet already has an auth object, on_login will fire — don't interfere
+        # If OAuth just completed, page.auth is set — on_login will fire, don't interfere
         if page.auth is not None:
+            return
+        # If this is the OAuth callback URL (popup window), show a closing screen
+        if page.route and "oauth" in str(page.route).lower():
+            page.controls.clear()
+            page.add(ft.Container(
+                expand=True,
+                content=ft.Column(
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    expand=True,
+                    controls=[ft.Text("Signing in...", size=14)],
+                ),
+            ))
+            page.update()
             return
         restored = await _restore_session()
         if restored:
@@ -204,11 +218,7 @@ def main(page: ft.Page) -> None:
         page.run_task(_do_logout)
 
     async def _on_login_click(e) -> None:
-        await page.login(
-            provider,
-            scope=config.DRIVE_SCOPES,
-            on_open_authorization_url=lambda url: page.launch_url(url, web_popup_window_name="_self"),
-        )
+        await page.login(provider, scope=config.DRIVE_SCOPES)
 
     page.on_login = _on_login
     page.on_logout = _on_logout
