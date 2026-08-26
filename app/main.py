@@ -86,7 +86,7 @@ def main(page: ft.Page) -> None:
 
     def _show_login(error: str | None = None) -> None:
         page.controls.clear()
-        page.add(build_login_view(on_login_click=_on_login_click))
+        page.add(build_login_view())
         if error:
             page.show_dialog(ft.SnackBar(
                 content=ft.Text(error, color="white"),
