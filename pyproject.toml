@@ -1,0 +1,19 @@
+[project]
+name = "kozmo-product-tree"
+version = "0.1.0"
+description = "Visual product workspace over Google Drive"
+requires-python = ">=3.12"
+dependencies = [
+    "flet>=0.24.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
